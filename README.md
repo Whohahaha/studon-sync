@@ -45,13 +45,13 @@ studon-sync scheduled          # 系统定时任务调用：到了设定时间�
 | 设置（课程、文件夹、计划） | `~/Library/Application Support/StudOn Sync/settings.json` | `%LOCALAPPDATA%\StudOn Sync\` |
 | 每门课的文件记录、旧版本 | 课程文件夹里隐藏的 `.studon-sync/` | 同左 |
 | 日志（每次同步一个文件） | `~/Library/Logs/StudOn Sync/` | `%LOCALAPPDATA%\StudOn Sync\Logs\` |
-| 账号密码 | 钥匙串，服务名 `studon-sync` | 凭据管理器，`studon-sync` |
+| 账号密码 | 钥匙串里**一个**条目：服务 `studon-sync`、账户 `credentials` | 凭据管理器，`studon-sync` |
 
 ## 常见问题
 
 - **登录失败 “TOTP 验证码被拒绝”**：令牌还没在 IdM 里确认激活，或 secret 填错了。用“账号”页（或 `studon-sync code`）显示的验证码在 IdM 里确认；若手机 App 也有同一令牌，两边验证码应一致。为防锁号，每次登录只尝试一次验证码、密码错误不重试。
 - **FAU 登录页改版**：登录失败时页面会保存到日志文件夹（`login-debug-*.html`），便于修复。
-- **macOS 询问钥匙串访问**：点“始终允许”。
+- **macOS 询问钥匙串访问**：点“始终允许”，只会问一次。App 有固定的代码签名，以后更新（重新构建）也不会再问。
 - **同步到“文稿/桌面”里的文件夹失败（Operation not permitted）**：系统设置 → 隐私与安全性 → 文件与文件夹（或完全磁盘访问权限），允许 StudOn Sync。
 
 ## 开发 / 打包
@@ -62,8 +62,16 @@ python3 -m venv .venv
 .venv/bin/studon-sync                         # 运行
 .venv/bin/python -m studon_sync.ui.devserver  # 在浏览器里调试界面 (http://127.0.0.1:8765)
 .venv/bin/python -m pytest                    # 测试
-cd packaging && ../.venv/bin/pyinstaller --noconfirm --distpath ../dist --workpath ../build studon-sync.spec
+packaging/build_mac.sh                        # 构建并签名 dist/StudOn Sync.app
 ```
 
-macOS 生成 `dist/StudOn Sync.app`（约 28 MB，压缩后 14 MB）。界面用系统自带的 WebView（pywebview），不打包浏览器内核。
+**代码签名**：macOS 钥匙串的“始终允许”认的是 App 的签名。`build_mac.sh` 默认用一个自签名证书
+“StudOn Sync Local Signing”签名（第一次运行时自动生成，放在
+`~/Library/Application Support/StudOn Sync/signing/` 里单独的钥匙串中，不动登录钥匙串、不需要管理员密码），
+所以重新构建后签名不变、不会重复弹窗。它只在本机有效。
+要发给别人用时，换成 Apple Developer ID（每年 99 美元）：把证书装进登录钥匙串后运行
+`SIGN_IDENTITY="Developer ID Application: 你的名字 (TEAMID)" packaging/build_mac.sh`，
+再用 `xcrun notarytool` 公证，别人打开时就不会有“无法验证开发者”的提示。
+
+macOS 生成 `dist/StudOn Sync.app`（约 30 MB，压缩后约 14 MB）。界面用系统自带的 WebView（pywebview），不打包浏览器内核。
 代码结构：`src/studon_sync/core/`（登录、设置、同步、文件保护，不含界面代码）、`ui/`（HTML/CSS/JS 界面 + Python 接口）、`system.py`（系统定时任务、通知）、`__main__.py`（命令行）。界面文字在 `i18n.py`，添加语言只需加一组翻译。
