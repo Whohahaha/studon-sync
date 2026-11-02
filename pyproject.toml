@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "studon-sync"
+version = "0.2.0"
+description = "Sync files from FAU StudOn courses (FAU SSO + TOTP login, PFERD-based) with a desktop UI"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "PFERD==3.10.1",
+    "pyotp>=2.9",
+    "keyring>=25",
+    "platformdirs>=4",
+    "PySide6>=6.6",
+]
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6"]
+
+[project.scripts]
+studon-sync = "studon_sync.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

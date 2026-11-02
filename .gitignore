@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+# never commit anything a user downloads or any session data
+.cookies
+.report
+*.log
+logs/
