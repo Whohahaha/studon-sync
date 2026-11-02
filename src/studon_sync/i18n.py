@@ -17,6 +17,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "sum.course": "{title} → {target}",
         "sum.counts": "  新增 {added} 个，更新 {changed} 个",
         "sum.errors": "  错误 {n} 个：",
+        "sum.kept_edited": "    ★ {path} 在 StudOn 上有新版本，你的笔记版本已保留；新版本另存为 {alt}",
+        "sum.pending": "  {n} 个新文件等待你在“文件”页确认",
+        "sum.removed_remote": "    − {path} 已从 StudOn 删除（本地保留）",
         "sum.ok": "结果：成功（日志：{log}）",
         "sum.failed": "结果：失败（日志：{log}）",
         # GUI

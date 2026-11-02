@@ -1,30 +1,33 @@
-"""Runs PFERD for all enabled courses and summarizes what changed."""
+"""Runs PFERD for the enabled courses (sync or listing only) and summarizes what changed."""
 
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath
 from typing import Callable, Optional
 
 from ..i18n import t
 from . import paths
 from . import settings as settings_mod
 from .courses import STUDON_URL
-from .settings import Course, Settings
+from .filestate import DOWNLOADING, CourseState, RunSummary, plan
+from .settings import Course
 
 # Only files: containers (folders, sessions, the course info tab) are entered to find them.
 ALLOWED_TYPES = {"file", "folder", "meeting", "info_tab"}
+
+MODE_ENV = "STUDON_SYNC_MODE"  # "sync" or "list" (crawl without downloading, to refresh the file tree)
 
 
 @dataclass
 class CourseResult:
     course: Course
-    added: list[str] = field(default_factory=list)
-    changed: list[str] = field(default_factory=list)
+    summary: RunSummary = field(default_factory=RunSummary)
     errors: list[str] = field(default_factory=list)
 
 
@@ -37,11 +40,15 @@ class SyncResult:
 
     @property
     def added(self) -> int:
-        return sum(len(c.added) for c in self.courses)
+        return sum(len(c.summary.added) for c in self.courses)
 
     @property
     def changed(self) -> int:
-        return sum(len(c.changed) for c in self.courses)
+        return sum(len(c.summary.updated) + len(c.summary.kept_edited) for c in self.courses)
+
+    @property
+    def kept_edited(self) -> int:
+        return sum(len(c.summary.kept_edited) for c in self.courses)
 
 
 def _section(course: Course) -> str:
@@ -69,6 +76,7 @@ def build_pferd_config(courses: list[Course]) -> str:
             "auth = auth:studon",
             f"target = {course.ref_id}",
             f"output_dir = {Path(course.target_dir).expanduser()}",
+            # Whether a file is (re)downloaded is decided by filestate.decide(); this is only the fallback.
             "redownload = never-smart",
             "on_conflict = no-delete",
             "tasks = 1",
@@ -123,12 +131,28 @@ def is_running() -> bool:
     return True
 
 
-def run_sync(on_line: Callable[[str], None] = lambda line: None) -> SyncResult:
-    """Syncs all enabled courses. `on_line` receives every output line (also written to the log)."""
+def _crawl_errors(course: Course, started: datetime) -> list[str]:
+    report = Path(course.target_dir).expanduser() / ".report"
+    if not report.exists() or report.stat().st_mtime < started.timestamp():
+        return ["no report written"]
+    return json.loads(report.read_text(encoding="utf-8")).get("encountered_errors", [])
+
+
+def run_sync(
+    on_line: Callable[[str], None] = lambda line: None,
+    ref_ids: Optional[list[str]] = None,
+    list_only: bool = False,
+) -> SyncResult:
+    """Syncs (or with list_only: only lists) the enabled courses, or the given ones.
+
+    `on_line` receives every output line (also written to the log)."""
     settings = settings_mod.load()
     started = datetime.now()
-    log_path = paths.log_dir() / f"sync-{started:%Y%m%d-%H%M%S}.log"
-    courses = [c for c in settings.courses if c.enabled]
+    log_path = paths.log_dir() / f"{'list' if list_only else 'sync'}-{started:%Y%m%d-%H%M%S}.log"
+    if ref_ids is None:
+        courses = [c for c in settings.courses if c.enabled]
+    else:
+        courses = [c for c in settings.courses if c.ref_id in ref_ids]
 
     lock = _Lock(paths.lock_file())
     if not lock.acquire():
@@ -141,7 +165,7 @@ def run_sync(on_line: Callable[[str], None] = lambda line: None) -> SyncResult:
                 log.flush()
                 on_line(line)
 
-            out(f"=== StudOn sync {started:%Y-%m-%d %H:%M:%S} ===")
+            out(f"=== StudOn {'list' if list_only else 'sync'} {started:%Y-%m-%d %H:%M:%S} ===")
             if not courses:
                 out(t("err.no_courses"))
                 return SyncResult(False, log_path, error=t("err.no_courses"))
@@ -149,7 +173,9 @@ def run_sync(on_line: Callable[[str], None] = lambda line: None) -> SyncResult:
             config = paths.pferd_config_file()
             config.write_text(build_pferd_config(courses), encoding="utf-8")
             for course in courses:
-                Path(course.target_dir).expanduser().mkdir(parents=True, exist_ok=True)
+                root = Path(course.target_dir).expanduser()
+                root.mkdir(parents=True, exist_ok=True)
+                CourseState(root).start_journal()
 
             proc = subprocess.Popen(
                 _pferd_command(config),
@@ -158,47 +184,63 @@ def run_sync(on_line: Callable[[str], None] = lambda line: None) -> SyncResult:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                env={**os.environ, "COLUMNS": "200", "PYTHONIOENCODING": "utf-8"},
+                env={
+                    **os.environ,
+                    "COLUMNS": "200",
+                    "PYTHONIOENCODING": "utf-8",
+                    MODE_ENV: "list" if list_only else "sync",
+                },
             )
             assert proc.stdout is not None
             for line in proc.stdout:
-                out(line.rstrip("\n"))
+                line = line.rstrip("\n")
+                if not line.startswith("Not deleted"):  # our hidden files; never deleted anyway
+                    out(line)
             code = proc.wait()
 
             result = SyncResult(code == 0, log_path)
             for course in courses:
-                cr = CourseResult(course)
-                report = Path(course.target_dir).expanduser() / ".report"
-                if report.exists() and report.stat().st_mtime >= started.timestamp():
-                    data = json.loads(report.read_text(encoding="utf-8"))
-                    cr.added, cr.changed = data.get("added", []), data.get("changed", [])
-                    cr.errors = data.get("encountered_errors", [])
-                else:
-                    cr.errors = ["no report written"]
+                cr = CourseResult(course, errors=_crawl_errors(course, started))
+                state = CourseState(Path(course.target_dir).expanduser())
+                cr.summary = state.apply_journal(crawl_ok=code == 0 and not cr.errors, started=started)
                 result.ok = result.ok and not cr.errors
                 result.courses.append(cr)
 
-            out("")
-            out(t("sum.header"))
-            for cr in result.courses:
-                out(t("sum.course", title=cr.course.title, target=cr.course.target_dir))
-                out(t("sum.counts", added=len(cr.added), changed=len(cr.changed)))
-                out_lines = [f"    + {p}" for p in cr.added] + [f"    ~ {p}" for p in cr.changed]
-                for line in out_lines:
-                    out(line)
-                if cr.errors:
-                    out(t("sum.errors", n=len(cr.errors)))
-                    for e in cr.errors:
-                        out(f"    ! {e}")
-            out(t("sum.ok" if result.ok else "sum.failed", log=log_path))
+            if not list_only:
+                _write_summary(result, out)
     finally:
         lock.release()
 
-    settings = settings_mod.load()  # reload: the GUI may have changed settings meanwhile
-    settings.last_sync = datetime.now().isoformat(timespec="seconds")
-    settings.last_sync_ok = result.ok
-    settings_mod.save(settings)
+    if not list_only:
+        settings = settings_mod.load()  # reload: the UI may have changed settings meanwhile
+        settings.last_sync = datetime.now().isoformat(timespec="seconds")
+        settings.last_sync_ok = result.ok
+        settings_mod.save(settings)
     return result
+
+
+def _write_summary(result: SyncResult, out: Callable[[str], None]) -> None:
+    out("")
+    out(t("sum.header"))
+    for cr in result.courses:
+        s = cr.summary
+        out(t("sum.course", title=cr.course.title, target=cr.course.target_dir))
+        out(t("sum.counts", added=len(s.added), changed=len(s.updated)))
+        for p in s.added:
+            out(f"    + {p}")
+        for p in s.updated:
+            out(f"    ~ {p}")
+        for p, alt in s.kept_edited:
+            out(t("sum.kept_edited", path=p, alt=alt))
+        if s.pending:
+            out(t("sum.pending", n=len(s.pending)))
+        for p in s.removed_remote:
+            out(t("sum.removed_remote", path=p))
+        if cr.errors:
+            out(t("sum.errors", n=len(cr.errors)))
+            for e in cr.errors:
+                out(f"    ! {e}")
+    out(t("sum.ok" if result.ok else "sum.failed", log=result.log_path))
 
 
 def test_login() -> bool:
@@ -225,11 +267,13 @@ def test_login() -> bool:
 
 
 def pferd_main(config: str) -> None:
-    """Entry point of the PFERD subprocess: FAU login + files-only filter patched in."""
+    """Entry point of the PFERD subprocess: FAU login, files-only filter and our download decisions."""
     import PFERD.__main__
+    from PFERD.crawl import crawler as crawler_mod
     from PFERD.crawl.ilias import ilias_web_crawler
     from PFERD.crawl.ilias.shibboleth_login import ShibbolethLogin
     from PFERD.logging import log
+    from PFERD.output_dir import OnConflict, Redownload
 
     from . import fau_login
 
@@ -238,8 +282,8 @@ def pferd_main(config: str) -> None:
 
     ShibbolethLogin.login = login
 
-    crawler = ilias_web_crawler.IliasWebCrawler
-    original = crawler._handle_ilias_element
+    ilias = ilias_web_crawler.IliasWebCrawler
+    original_handle = ilias._handle_ilias_element
 
     async def handle(self, parent_path, element, *args, **kwargs):  # type: ignore[no-untyped-def]
         # StudOn plugins (FAU-tv series, livestreams, exercise registration) are not folders, but
@@ -247,9 +291,39 @@ def pferd_main(config: str) -> None:
         if element.type.value not in ALLOWED_TYPES or "ilObjPluginDispatchGUI" in element.url:
             log.explain(f"Skipping {element.type.value} {element.name!r} (files only)")
             return None
-        return await original(self, parent_path, element, *args, **kwargs)
+        return await original_handle(self, parent_path, element, *args, **kwargs)
 
-    crawler._handle_ilias_element = handle
+    ilias._handle_ilias_element = handle
+
+    list_only = os.environ.get(MODE_ENV) == "list"
+    courses = {c.ref_id: c for c in settings_mod.load().courses}
+    states: dict[str, CourseState] = {}
+    original_download = crawler_mod.Crawler.download
+
+    async def download(self, path, *, etag_differs=None, mtime=None, redownload=None, on_conflict=None):  # type: ignore[no-untyped-def]
+        m = re.search(r"studon-(\d+)$", self.name)
+        course = courses.get(m.group(1)) if m else None
+        if course is None:
+            return await original_download(
+                self, path, etag_differs=etag_differs, mtime=mtime, redownload=redownload, on_conflict=on_conflict
+            )
+        root = Path(course.target_dir).expanduser()
+        state = states.setdefault(course.ref_id, CourseState(root))
+        rel = str(PurePosixPath(*PurePath(path).parts))
+        remote = mtime.replace(microsecond=0).isoformat() if mtime else None
+
+        if list_only:
+            state.log(path=rel, action="seen", remote_mtime=remote)
+            return None
+
+        action, target = plan(state, rel, remote, course.selection, course.new_files)
+        if action not in DOWNLOADING:
+            return None
+        return await original_download(
+            self, PurePath(target), mtime=mtime, redownload=Redownload.ALWAYS, on_conflict=OnConflict.NO_DELETE
+        )
+
+    crawler_mod.Crawler.download = download
 
     sys.argv = ["pferd", "--config", config, "--report"]
     PFERD.__main__.main()

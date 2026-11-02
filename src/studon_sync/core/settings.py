@@ -15,6 +15,9 @@ class Course:
     title: str
     target_dir: str
     enabled: bool = True
+    # explicit choices from the file selection page: {"path/or/folder": True|False}
+    selection: dict[str, bool] = field(default_factory=dict)
+    new_files: str = "auto"  # "auto": download new files right away; "review": wait until selected
 
     @property
     def url(self) -> str:
