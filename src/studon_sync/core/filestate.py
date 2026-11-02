@@ -177,6 +177,7 @@ class CourseState:
         if not self.journal_path().exists():
             return summary
         now = datetime.now().isoformat(timespec="seconds")
+        self.data.setdefault("catalog_since", now)  # files first seen after this count as "new"
         seen: set[str] = set()
         for line in self.journal_path().read_text(encoding="utf-8").splitlines():
             ev = json.loads(line)

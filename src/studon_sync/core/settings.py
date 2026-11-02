@@ -39,7 +39,6 @@ class Settings:
     default_target_dir: str = str(Path.home() / "Documents" / "StudOn")
     courses: list[Course] = field(default_factory=list)
     schedule: Schedule = field(default_factory=Schedule)
-    start_at_login: bool = False
     last_sync: Optional[str] = None  # ISO timestamp of the last finished sync
     last_sync_ok: Optional[bool] = None
 

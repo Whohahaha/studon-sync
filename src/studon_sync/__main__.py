@@ -8,6 +8,7 @@ StudOn 同步
   studon-sync add-course URL     添加课程（可加 --target 文件夹）
   studon-sync list               列出课程
   studon-sync sync               同步所有启用的课程
+  studon-sync scheduled          （系统定时任务调用）到了设定时间就同步
 """
 
 import argparse
@@ -118,10 +119,29 @@ def cmd_sync(args: argparse.Namespace) -> int:
     return 0 if result.ok else 1
 
 
-def cmd_gui(args: argparse.Namespace) -> int:
-    from .gui.app import run
+def cmd_ui(args: argparse.Namespace) -> int:
+    from .ui.app import run
 
-    return run(background="--background" in sys.argv)
+    return run()
+
+
+def cmd_scheduled(args: argparse.Namespace) -> int:
+    """Called by the OS scheduler every 15 minutes: syncs if the configured time has come."""
+    from . import system
+    from .core import runner, schedule, settings
+    from .i18n import t
+
+    if not schedule.is_due(settings.load()) or runner.is_running():
+        return 0
+    result = runner.run_sync()
+    if not result.ok:
+        system.notify(t("app.title"), t("notify.failed"))
+    elif result.added or result.changed:
+        text = t("notify.new", added=result.added, changed=result.changed)
+        if result.kept_edited:
+            text += " · " + t("notify.kept_edited", n=result.kept_edited)
+        system.notify(t("app.title"), text)
+    return 0 if result.ok else 1
 
 
 def main() -> int:
@@ -137,7 +157,8 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(prog="studon-sync", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("gui").add_argument("--background", action="store_true")
+    sub.add_parser("ui")
+    sub.add_parser("scheduled")
     sub.add_parser("setup")
     sub.add_parser("code")
     sub.add_parser("test-login")
@@ -150,8 +171,9 @@ def main() -> int:
     args = parser.parse_args()
 
     commands = {
-        None: cmd_gui,
-        "gui": cmd_gui,
+        None: cmd_ui,
+        "ui": cmd_ui,
+        "scheduled": cmd_scheduled,
         "setup": cmd_setup,
         "code": cmd_code,
         "test-login": cmd_test_login,

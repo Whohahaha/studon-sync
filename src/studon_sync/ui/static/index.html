@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StudOn Sync</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand"><div class="logo">S</div><div><b>StudOn Sync</b><small id="brand-status"></small></div></div>
+  <nav>
+    <button data-view="sync" class="active"><span class="ico">⟳</span><span data-t="nav.sync"></span></button>
+    <button data-view="courses"><span class="ico">▤</span><span data-t="nav.courses"></span></button>
+    <button data-view="files"><span class="ico">☑</span><span data-t="nav.files"></span><span class="pill" id="pending-pill" hidden></span></button>
+    <button data-view="account"><span class="ico">⚿</span><span data-t="nav.account"></span></button>
+  </nav>
+  <button class="sync-main" id="sync-btn"><span data-t="sync.now"></span></button>
+</aside>
+
+<main>
+  <!-- Sync -->
+  <section id="view-sync" class="view active">
+    <header><h1 data-t="nav.sync"></h1><p class="sub" id="last-sync"></p></header>
+    <div class="cards" id="course-cards"></div>
+    <div class="card">
+      <h2 data-t="sched.title"></h2>
+      <div class="row">
+        <div class="seg" id="sched-mode">
+          <button data-mode="off" data-t="sched.off"></button>
+          <button data-mode="daily" data-t="sched.daily"></button>
+          <button data-mode="interval" data-t="sched.interval"></button>
+        </div>
+        <label class="inline" id="sched-time-wrap"><span data-t="sched.at"></span><input type="time" id="sched-time"></label>
+        <label class="inline" id="sched-hours-wrap"><span data-t="sched.every"></span><input type="number" id="sched-hours" min="1" max="168"><span data-t="sched.hours"></span></label>
+      </div>
+      <p class="hint" data-t="sched.hint"></p>
+    </div>
+    <div class="card log-card">
+      <div class="row between"><h2 data-t="log.title"></h2><button class="link" id="open-logs" data-t="log.open"></button></div>
+      <pre id="log" class="log"></pre>
+    </div>
+  </section>
+
+  <!-- Courses -->
+  <section id="view-courses" class="view">
+    <header><h1 data-t="nav.courses"></h1><p class="sub" data-t="crs.intro"></p></header>
+    <div class="card">
+      <form class="row" id="add-form">
+        <input id="add-url" class="grow" data-tp="crs.url_placeholder" autocomplete="off">
+        <button class="primary" id="add-btn" data-t="crs.add"></button>
+      </form>
+      <p class="msg" id="add-msg"></p>
+    </div>
+    <div id="course-list"></div>
+    <div class="card row between">
+      <div><div class="label" data-t="crs.default_dir"></div><div class="path" id="default-dir"></div></div>
+      <button id="default-dir-btn" data-t="crs.choose"></button>
+    </div>
+  </section>
+
+  <!-- Files -->
+  <section id="view-files" class="view">
+    <header class="row between">
+      <div><h1 data-t="nav.files"></h1><p class="sub" data-t="files.intro"></p></div>
+      <select id="files-course"></select>
+    </header>
+    <div class="card">
+      <div class="row between wrap">
+        <div class="row">
+          <span class="label" data-t="files.new_policy"></span>
+          <div class="seg" id="new-policy">
+            <button data-policy="auto" data-t="files.auto"></button>
+            <button data-policy="review" data-t="files.review"></button>
+          </div>
+        </div>
+        <div class="row">
+          <label class="inline"><input type="checkbox" id="only-new"><span data-t="files.only_new"></span></label>
+          <button id="refresh-tree" data-t="files.refresh"></button>
+        </div>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div id="tree" class="tree"></div>
+      <p class="hint" id="tree-hint"></p>
+    </div>
+  </section>
+
+  <!-- Account -->
+  <section id="view-account" class="view">
+    <header><h1 data-t="nav.account"></h1><p class="sub" data-t="acc.intro"></p></header>
+    <div class="card">
+      <form id="acc-form" class="form">
+        <label><span data-t="acc.username"></span><input id="acc-user" autocomplete="username"></label>
+        <label><span data-t="acc.password"></span><input id="acc-pass" type="password" autocomplete="current-password"></label>
+        <label><span data-t="acc.secret"></span><input id="acc-secret" type="password" autocomplete="off" data-tp="acc.secret_placeholder"></label>
+        <div class="row">
+          <button class="primary" data-t="acc.save"></button>
+          <button type="button" id="acc-test" data-t="acc.test"></button>
+          <span class="msg" id="acc-msg"></span>
+        </div>
+      </form>
+    </div>
+    <div class="card totp">
+      <div>
+        <h2 data-t="acc.code_title"></h2>
+        <p class="hint" data-t="acc.code_help"></p>
+      </div>
+      <div class="code-box">
+        <div class="code" id="totp-code">— — —</div>
+        <div class="ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" class="track"/><circle cx="18" cy="18" r="16" class="bar" id="totp-bar"/></svg><span id="totp-left"></span></div>
+        <button class="link" id="totp-copy" data-t="acc.copy"></button>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
