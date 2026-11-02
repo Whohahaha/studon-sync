@@ -242,7 +242,9 @@ def pferd_main(config: str) -> None:
     original = crawler._handle_ilias_element
 
     async def handle(self, parent_path, element, *args, **kwargs):  # type: ignore[no-untyped-def]
-        if element.type.value not in ALLOWED_TYPES:
+        # StudOn plugins (FAU-tv series, livestreams, exercise registration) are not folders, but
+        # PFERD guesses "folder" for them and then fails to open them, aborting the whole course.
+        if element.type.value not in ALLOWED_TYPES or "ilObjPluginDispatchGUI" in element.url:
             log.explain(f"Skipping {element.type.value} {element.name!r} (files only)")
             return None
         return await original(self, parent_path, element, *args, **kwargs)
