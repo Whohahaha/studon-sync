@@ -34,23 +34,34 @@ class LoginError(Exception):
     pass
 
 
+def _last_step_file() -> Path:
+    return paths.config_dir() / "totp_last_step"
+
+
 class _Totp:
-    """Generates TOTP codes and never hands out the same code twice."""
+    """Generates TOTP codes and never submits a time step that was already used.
+
+    FAU rejects a code that was used before. The last used step is kept on disk, so this also
+    holds across processes (scheduled sync, manual sync, test login); callers serialize logins."""
 
     def __init__(self, secret: str) -> None:
         self._totp = pyotp.TOTP(secret) if secret else None
-        self._last_step: Optional[int] = None
 
     async def code(self) -> str:
         if self._totp is None:
             raise LoginError(t("err.no_totp"))
-        step = int(time.time()) // self._totp.interval
-        if step == self._last_step:
-            # Same 30 s window as the last (possibly rejected) code: wait for a fresh one.
-            await asyncio.sleep(self._totp.interval - time.time() % self._totp.interval + 1)
-            step = int(time.time()) // self._totp.interval
-        self._last_step = step
-        return self._totp.now()
+        interval = self._totp.interval
+        try:
+            last = int(_last_step_file().read_text().strip())
+        except (OSError, ValueError):
+            last = -1
+        step = int(time.time()) // interval
+        if step <= last:
+            # Wait for the first window after the last used one (at most ~30 s).
+            await asyncio.sleep((last + 1) * interval - time.time() + 1)
+            step = int(time.time()) // interval
+        _last_step_file().write_text(str(step))
+        return self._totp.at(step * interval)
 
 
 def _dump_debug(html: str, reason: str) -> Path:

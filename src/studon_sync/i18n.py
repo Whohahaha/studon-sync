@@ -11,6 +11,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "err.bad_otp": "TOTP 验证码被拒绝。请确认令牌已在 IdM 里激活、secret 正确。页面已保存到 {path}",
         "err.too_many_steps": "登录步骤过多，页面已保存到 {path}",
         "err.busy": "另一个同步正在进行。",
+        "err.not_logged_in": "登录流程走完了，但 StudOn 仍显示未登录。",
+        "err.course_login_failed": "登录失败，本课程本次未同步：{err}",
+        "err.course_incomplete": "本课程本次没有同步完成（详见日志）。",
         "err.no_courses": "还没有启用的课程。",
         # sync summary
         "sum.header": "=== 本次汇总 ===",

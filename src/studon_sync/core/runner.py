@@ -15,6 +15,7 @@ from ..i18n import t
 from . import paths
 from . import settings as settings_mod
 from .courses import STUDON_URL
+from .locking import FileLock
 from .filestate import DOWNLOADING, CourseState, RunSummary, plan
 from .settings import Course
 
@@ -95,46 +96,36 @@ def _pferd_command(config: Path) -> list[str]:
     return [sys.executable, "-m", "studon_sync", "_pferd", str(config)]
 
 
-class _Lock:
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._fd: Optional[int] = None
-
-    def acquire(self) -> bool:
-        self._fd = os.open(self._path, os.O_RDWR | os.O_CREAT)
-        try:
-            if os.name == "nt":
-                import msvcrt
-
-                msvcrt.locking(self._fd, msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            os.close(self._fd)
-            self._fd = None
-            return False
-        return True
-
-    def release(self) -> None:
-        if self._fd is not None:
-            os.close(self._fd)  # closing releases the lock
-            self._fd = None
-
-
 def is_running() -> bool:
-    lock = _Lock(paths.lock_file())
+    lock = FileLock(paths.lock_file())
     if lock.acquire():
         lock.release()
         return False
     return True
 
 
-def _crawl_errors(course: Course, started: datetime) -> list[str]:
+_RUNNING = re.compile(r"^Running crawl:studon-(\d+)")
+_LOGIN_ERROR = re.compile(r"LoginError: (.*)$")
+
+
+def login_failures(lines: list[str]) -> dict[str, str]:
+    """ref_id -> login error message, from PFERD's output (errors are printed under 'Running crawl:...')."""
+    failures: dict[str, str] = {}
+    current = None
+    for line in lines:
+        if m := _RUNNING.match(line):
+            current = m.group(1)
+        elif current and (m := _LOGIN_ERROR.search(line)):
+            failures.setdefault(current, m.group(1).strip())
+    return failures
+
+
+def _crawl_errors(course: Course, started: datetime, login_failed: Optional[str]) -> list[str]:
+    if login_failed:
+        return [t("err.course_login_failed", err=login_failed)]
     report = Path(course.target_dir).expanduser() / ".report"
     if not report.exists() or report.stat().st_mtime < started.timestamp():
-        return ["no report written"]
+        return [t("err.course_incomplete")]
     return json.loads(report.read_text(encoding="utf-8")).get("encountered_errors", [])
 
 
@@ -154,7 +145,7 @@ def run_sync(
     else:
         courses = [c for c in settings.courses if c.ref_id in ref_ids]
 
-    lock = _Lock(paths.lock_file())
+    lock = FileLock(paths.lock_file())
     if not lock.acquire():
         return SyncResult(False, log_path, error=t("err.busy"))
     try:
@@ -192,15 +183,18 @@ def run_sync(
                 },
             )
             assert proc.stdout is not None
+            output: list[str] = []
             for line in proc.stdout:
                 line = line.rstrip("\n")
-                if not line.startswith("Not deleted"):  # our hidden files; never deleted anyway
+                output.append(line)
+                if not line.startswith(("Not deleted", "  Not deleted")):  # never deleted anyway
                     out(line)
             code = proc.wait()
+            failed_login = login_failures(output)
 
             result = SyncResult(code == 0, log_path)
             for course in courses:
-                cr = CourseResult(course, errors=_crawl_errors(course, started))
+                cr = CourseResult(course, errors=_crawl_errors(course, started, failed_login.get(course.ref_id)))
                 state = CourseState(Path(course.target_dir).expanduser())
                 cr.summary = state.apply_journal(crawl_ok=code == 0 and not cr.errors, started=started)
                 result.ok = result.ok and not cr.errors
@@ -244,24 +238,23 @@ def _write_summary(result: SyncResult, out: Callable[[str], None]) -> None:
 
 
 def test_login() -> bool:
-    """Logs in once and checks that StudOn considers us logged in. Raises LoginError."""
+    """Checks the saved session, logging in only if needed. Raises LoginError."""
 
     async def run() -> bool:
         import ssl
 
         import aiohttp
         import certifi
-        from PFERD.crawl.ilias.kit_ilias_html import IliasPage, IliasSoup
-        from PFERD.utils import soupify
 
-        from . import fau_login
+        from . import session
 
+        session.reset()
         connector = aiohttp.TCPConnector(ssl=ssl.create_default_context(cafile=certifi.where()))
-        async with aiohttp.ClientSession(connector=connector) as sess:
-            await fau_login.login(sess)
-            async with sess.get(f"{STUDON_URL}/ilias.php?baseClass=ilDashboardGUI&cmd=show") as resp:
-                soup = IliasSoup(soupify(await resp.read()), str(resp.url))
-            return IliasPage.is_logged_in(soup)
+        async with aiohttp.ClientSession(
+            connector=connector, cookie_jar=session.shared_jar(), requote_redirect_url=False
+        ) as sess:
+            await session.ensure_logged_in(sess)
+            return True
 
     return asyncio.run(run())
 
@@ -275,12 +268,37 @@ def pferd_main(config: str) -> None:
     from PFERD.logging import log
     from PFERD.output_dir import OnConflict, Redownload
 
-    from . import fau_login
+    from PFERD.crawl.http_crawler import HttpCrawler
+    from PFERD.crawl.ilias.kit_ilias_html import IliasElementType, IliasPage
+
+    from . import session
 
     async def login(self, sess):  # type: ignore[no-untyped-def]
-        await fau_login.login(sess)
+        await session.ensure_logged_in(sess)
 
     ShibbolethLogin.login = login
+
+    # All crawlers share one cookie jar (with domains), saved centrally instead of PFERD's
+    # per-course .cookies files; so one login serves every course of the run (and later runs).
+    def load_cookies(self):  # type: ignore[no-untyped-def]
+        self._cookie_jar = session.shared_jar()
+
+    def save_cookies(self):  # type: ignore[no-untyped-def]
+        session.save_jar()
+
+    HttpCrawler._load_cookies = load_cookies
+    HttpCrawler._save_cookies = save_cookies
+
+    # StudOn plugins (FAU-tv, livestream, exercise registration): classify quietly as a type we
+    # skip, instead of PFERD's "unexpected HTML structure ... Defaulting to FOLDER" warning.
+    original_find_type = IliasPage._find_type_for_element
+
+    def find_type(element_name, url, icon_for_element):  # type: ignore[no-untyped-def]
+        if "ilObjPluginDispatchGUI" in url:
+            return IliasElementType.BOOKING
+        return original_find_type(element_name, url, icon_for_element)
+
+    IliasPage._find_type_for_element = staticmethod(find_type)
 
     ilias = ilias_web_crawler.IliasWebCrawler
     original_handle = ilias._handle_ilias_element
