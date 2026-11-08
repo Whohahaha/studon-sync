@@ -9,3 +9,36 @@ dist/
 .report
 *.log
 logs/
+
+# OS / tooling
+.DS_Store
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.idea/
+.vscode/
+venv/
+env/
+
+# secrets: credentials, TOTP secrets, cookies, local config (never commit)
+.env
+.env.*
+*.cookies
+cookies*.json
+*.secret
+*totp*.txt
+credentials*.json
+config.local.*
+settings.local.*
+*.pem
+*.key
+*.p12
+
+# per-course sync state and downloaded course material
+.studon-sync/
+downloads/
+*.pdf
+*.zip
+login-debug*/
+*.html.debug
