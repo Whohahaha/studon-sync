@@ -20,7 +20,7 @@ A desktop app that downloads the files of your FAU StudOn courses into a folder 
 
 ## Install
 
-- **macOS**: download `StudOn-Sync-macOS.zip` from [Releases](https://github.com/Whohahaha/studon-sync/releases), unzip it and move `StudOn Sync.app` to Applications.
+- **macOS**: download [`StudOn-Sync-macOS.zip`](https://github.com/Whohahaha/studon-sync/releases/latest/download/StudOn-Sync-macOS.zip) from [Releases](https://github.com/Whohahaha/studon-sync/releases) (Apple Silicon only), unzip it and move `StudOn Sync.app` to Applications.
   The app is not notarized by Apple, so the first time right-click it → Open (or click "Open Anyway" in System Settings → Privacy & Security).
 - **From source** (macOS / Windows / Linux, Python 3.11+):
   ```bash

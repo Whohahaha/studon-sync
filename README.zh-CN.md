@@ -19,7 +19,7 @@
 
 ## 安装
 
-- **macOS**：在 [Releases](https://github.com/Whohahaha/studon-sync/releases) 下载 `StudOn-Sync-macOS.zip`，解压后把 `StudOn Sync.app` 拖进“应用程序”。
+- **macOS**：在 [Releases](https://github.com/Whohahaha/studon-sync/releases) 下载 [`StudOn-Sync-macOS.zip`](https://github.com/Whohahaha/studon-sync/releases/latest/download/StudOn-Sync-macOS.zip)（仅 Apple 芯片），解压后把 `StudOn Sync.app` 拖进“应用程序”。
   这个 App 没有 Apple 公证，第一次打开时请右键 → 打开（或在“系统设置 → 隐私与安全性”里点“仍要打开”）。
 - **从源码运行**（macOS / Windows / Linux，需要 Python 3.11+）：
   ```bash
