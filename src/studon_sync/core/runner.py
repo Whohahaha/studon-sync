@@ -12,7 +12,7 @@ from pathlib import Path, PurePath, PurePosixPath
 from typing import Callable, Optional
 
 from ..i18n import t
-from . import paths
+from . import logclean, paths
 from . import settings as settings_mod
 from .courses import STUDON_URL
 from .locking import FileLock
@@ -204,6 +204,11 @@ def run_sync(
                 _write_summary(result, out)
     finally:
         lock.release()
+
+    try:
+        logclean.clean_logs()
+    except Exception:  # cleanup must never fail a sync
+        pass
 
     if not list_only:
         settings = settings_mod.load()  # reload: the UI may have changed settings meanwhile
