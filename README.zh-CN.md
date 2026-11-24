@@ -44,6 +44,8 @@
 4. **同步**：点左下角“立即同步”；“自动同步”可选每天某个时间或每隔 N 小时。
    自动同步由系统在后台执行（macOS LaunchAgent / Windows 任务计划），不需要打开本程序；有新文件或同步失败时弹出通知。
 
+界面语言：中文、English、Deutsch。默认跟随系统语言，可在左侧栏底部的语言菜单切换（或 `studon-sync --lang zh|en|de|auto`），通知和同步日志也会使用所选语言。
+
 ## 命令行
 
 ```bash
@@ -54,6 +56,7 @@ studon-sync add-course URL [--target 文件夹]
 studon-sync list
 studon-sync sync               # 同步所有启用的课程
 studon-sync scheduled          # 系统定时任务调用：到了设定时间才同步
+studon-sync --lang zh          # 界面语言：zh | en | de | auto（跟随系统）
 ```
 
 ## 数据存放位置
@@ -104,4 +107,4 @@ macOS 生成 `dist/StudOn Sync.app`（约 30 MB，压缩后约 14 MB）。界面
 
 许可证：[MIT](LICENSE)。下载引擎 [PFERD](https://github.com/Garmelon/PFERD) 同样使用 MIT 许可证。
 
-代码结构：`src/studon_sync/core/`（登录、设置、同步、文件保护，不含界面代码）、`ui/`（HTML/CSS/JS 界面 + Python 接口）、`system.py`（系统定时任务、通知）、`__main__.py`（命令行）。界面文字在 `i18n.py`，添加语言只需加一组翻译。
+代码结构：`src/studon_sync/core/`（登录、设置、同步、文件保护，不含界面代码）、`ui/`（HTML/CSS/JS 界面 + Python 接口）、`system.py`（系统定时任务、通知）、`__main__.py`（命令行）。界面文字在 `i18n.py`，添加语言只需加一组翻译，并在 `LANGUAGES` 里写上语言名。

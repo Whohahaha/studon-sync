@@ -11,7 +11,8 @@ from ..core import settings as settings_mod
 from ..core.filestate import CourseState, has_decision, is_selected, sha256_file
 from ..core.fau_login import LoginError
 from ..core.settings import Course
-from ..i18n import STRINGS, t
+from .. import i18n
+from ..i18n import t
 
 
 class Api:
@@ -28,7 +29,26 @@ class Api:
     # ---- general -------------------------------------------------------------------------
 
     def strings(self) -> dict[str, str]:
-        return STRINGS[settings_mod.load().language]
+        return i18n.strings()
+
+    def language(self) -> dict:
+        return {
+            "setting": settings_mod.load().language,
+            "current": i18n.current(),
+            "options": i18n.LANGUAGES,
+        }
+
+    def set_language(self, setting: str) -> dict[str, str]:
+        """Saves the language setting ("auto" or a code), switches to it and returns the new strings."""
+        if setting != "auto" and setting not in i18n.STRINGS:
+            setting = "auto"
+        s = settings_mod.load()
+        s.language = setting
+        settings_mod.save(s)
+        i18n.set_language(setting)
+        if self._window is not None:
+            self._window.set_title(t("app.title"))
+        return i18n.strings()
 
     def state(self) -> dict:
         s = settings_mod.load()

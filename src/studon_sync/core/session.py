@@ -85,9 +85,9 @@ async def ensure_logged_in(sess: aiohttp.ClientSession) -> None:
         with FileLock(paths.config_dir() / "login.lock"):
             _reload_if_newer()
             if await is_logged_in(sess):  # another crawler/run logged in meanwhile
-                print("[studon-sync] 复用已有登录", flush=True)
+                print(t("log.reuse_login"), flush=True)
                 return
-            print("[studon-sync] 新登录 FAU SSO + TOTP", flush=True)
+            print(t("log.new_login"), flush=True)
             await fau_login.login(sess)
             if not await is_logged_in(sess):
                 raise fau_login.LoginError(t("err.not_logged_in"))

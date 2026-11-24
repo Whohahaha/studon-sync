@@ -35,7 +35,7 @@ class Schedule:
 
 @dataclass
 class Settings:
-    language: str = "zh"
+    language: str = "auto"  # "auto" = follow the system language, or "zh" | "en" | "de"
     default_target_dir: str = str(Path.home() / "Documents" / "StudOn")
     courses: list[Course] = field(default_factory=list)
     schedule: Schedule = field(default_factory=Schedule)

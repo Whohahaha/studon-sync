@@ -44,6 +44,8 @@ The app has four pages:
 3. **Files**: all files in StudOn's folder structure, with checkboxes and status labels (downloaded / edited by you / new version, notes kept / new, waiting / deleted on StudOn). "Refresh list" reads the listing without downloading.
 4. **Sync**: "Sync now", or schedule a daily time or every N hours. Scheduled syncs run in the background through the OS (macOS LaunchAgent / Windows Task Scheduler) without the app open, with a notification for new files or failures.
 
+Language: English, German and Chinese. By default the app follows the system language; change it with the language menu at the bottom of the sidebar (or `studon-sync --lang en|de|zh|auto`). The choice also applies to notifications and sync logs.
+
 ### Command line
 
 ```bash
@@ -54,6 +56,7 @@ studon-sync add-course URL [--target FOLDER]
 studon-sync list
 studon-sync sync               # sync all enabled courses
 studon-sync scheduled          # used by the OS scheduler: syncs only when due
+studon-sync --lang de          # interface language: zh | en | de | auto (follow the system)
 ```
 
 ### Where data is stored
@@ -89,7 +92,7 @@ packaging/build_mac.sh                        # build and sign dist/StudOn Sync.
 
 `build_mac.sh` signs with a self-signed "StudOn Sync Local Signing" certificate (created on first run in a separate keychain under `~/Library/Application Support/StudOn Sync/signing/`), so rebuilds keep the same signature and macOS Keychain "Always Allow" keeps working. For a notarized build set `SIGN_IDENTITY="Developer ID Application: …"` and notarize with `xcrun notarytool`.
 
-Code layout: `src/studon_sync/core/` (login, settings, sync, file protection; no UI code), `ui/` (HTML/CSS/JS UI and its Python API), `system.py` (OS scheduler, notifications), `__main__.py` (CLI). UI strings live in `i18n.py`.
+Code layout: `src/studon_sync/core/` (login, settings, sync, file protection; no UI code), `ui/` (HTML/CSS/JS UI and its Python API), `system.py` (OS scheduler, notifications), `__main__.py` (CLI). UI strings live in `i18n.py`; to add a language, add one dict of translations there and its name in `LANGUAGES`.
 
 ## License
 

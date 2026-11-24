@@ -48,6 +48,9 @@ nav .ico { width: 18px; text-align: center; color: var(--muted); }
 nav .pill { margin-left: auto; }
 .sync-main { margin-top: auto; border: 0; border-radius: 9px; padding: 10px; cursor: pointer; font-weight: 600;
   color: #fff; background: var(--accent); }
+.lang { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 0 6px; color: var(--muted); }
+.lang select { flex: 1; min-width: 0; padding: 4px 6px; font-size: 12px; }
+.lang + .sync-main { margin-top: 0; }
 .sync-main:disabled { opacity: .6; cursor: default; }
 .sync-main.running span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px;
   border: 2px solid #fff; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }

@@ -4,8 +4,9 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 const t = (key, vars = {}) => (S[key] || key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const fmtDate = iso => iso ? new Date(iso).toLocaleDateString(undefined, { year: "2-digit", month: "2-digit", day: "2-digit" }) : "";
-const fmtWhen = iso => iso ? new Date(iso).toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+let LOCALE;  // UI language for dates, so they match the text
+const fmtDate = iso => iso ? new Date(iso).toLocaleDateString(LOCALE, { year: "2-digit", month: "2-digit", day: "2-digit" }) : "";
+const fmtWhen = iso => iso ? new Date(iso).toLocaleString(LOCALE, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
 
 window.addEventListener("pywebviewready", init);
 window.addEventListener("unhandledrejection", e => console.error("unhandled:", e.reason && e.reason.stack || e.reason));
@@ -13,12 +14,38 @@ window.addEventListener("unhandledrejection", e => console.error("unhandled:", e
 async function init() {
   api = window.pywebview.api;
   S = await api.strings();
-  $$("[data-t]").forEach(el => (el.textContent = t(el.dataset.t)));
-  $$("[data-tp]").forEach(el => (el.placeholder = t(el.dataset.tp)));
-  bindNav(); bindSync(); bindCourses(); bindFiles(); bindAccount();
+  await renderLanguage();
+  applyStrings();
+  bindNav(); bindSync(); bindCourses(); bindFiles(); bindAccount(); bindLanguage();
   await refresh();
   const p = await api.progress(0);
   if (p.job) watchJob();
+}
+
+/* ---------- language ---------- */
+function applyStrings() {
+  $$("[data-t]").forEach(el => (el.textContent = t(el.dataset.t)));
+  $$("[data-tp]").forEach(el => (el.placeholder = t(el.dataset.tp)));
+  $$("[data-ta]").forEach(el => { el.title = t(el.dataset.ta); el.setAttribute("aria-label", el.title); });
+  $("#legend").innerHTML = STATUS.map(s => `<span class="badge ${s}">${t("st." + s)}</span>`).join("");
+  $("#sync-btn span").textContent = t($("#sync-btn").classList.contains("running") ? "sync.running" : "sync.now");
+}
+async function renderLanguage() {
+  const L = await api.language();
+  LOCALE = { zh: "zh-CN", en: "en-GB", de: "de-DE" }[L.current];
+  document.documentElement.lang = L.current;
+  $("#lang-select").innerHTML = [["auto", t("lang.auto")], ...Object.entries(L.options)]
+    .map(([v, name]) => `<option value="${v}">${esc(name)}</option>`).join("");
+  $("#lang-select").value = L.setting in L.options ? L.setting : "auto";
+}
+function bindLanguage() {
+  $("#lang-select").addEventListener("change", async e => {
+    S = await api.set_language(e.target.value);
+    await renderLanguage();
+    applyStrings();
+    await refresh();
+    if ($("#view-files").classList.contains("active")) loadTree();
+  });
 }
 
 async function refresh() {
@@ -165,7 +192,6 @@ function bindFiles() {
     $("#refresh-tree").disabled = true; $("#tree-hint").textContent = t("files.refreshing");
     watchJob(() => { $("#refresh-tree").disabled = false; loadTree(); });
   });
-  $("#legend").innerHTML = STATUS.map(s => `<span class="badge ${s}">${t("st." + s)}</span>`).join("");
 }
 
 function renderCourseSelect() {
