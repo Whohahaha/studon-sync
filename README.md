@@ -1,77 +1,96 @@
-# StudOn 同步
+# StudOn Sync
 
-自动把 FAU StudOn 课程里的文件下载到自己电脑上的文件夹（可以是 Google Drive / OneDrive / Dropbox 的同步文件夹），保持 StudOn 的文件夹结构，并可每天自动更新。
+**English** | [中文](README.zh-CN.md)
 
-- 用 FAU IdM 账号登录（FAU SSO + TOTP 多因素认证，验证码自动生成）
-- 账号、密码、TOTP secret 只保存在**本机**的系统钥匙串（macOS 钥匙串 / Windows 凭据管理器），不会上传
-- 支持多个课程，每个课程可单独选择下载文件夹
-- 增量同步：只下载新文件或服务器上更新过的文件；**从不删除本地文件**
-- **保护你的笔记**：服务器上的文件更新时，若本地文件没改过就替换（旧版移到课程文件夹里隐藏的 `.studon-sync/versions/`）；
-  若你改过（比如在 PDF 上做了笔记），绝不覆盖，新版另存为 `文件名 (StudOn 日期).pdf` 放在旁边，并提醒你
-- 你自己删掉的文件不会被重新下载（除非在“文件”页重新勾选）；StudOn 上删掉的文件本地保留，并在“文件”页标出
-- “文件”页可以勾选要下载的文件/文件夹；新文件可选“自动下载”或“等我确认”
-- 只下载文件（不含视频、论坛、作业、链接）；请求限速，对 StudOn 友好
-- 下载引擎基于 [PFERD](https://github.com/Garmelon/PFERD)
+> **Unofficial tool.** This project is not affiliated with or endorsed by FAU, RRZE or StudOn.
+> Please read the [disclaimer and rules of use](#disclaimer-and-rules-of-use) before using it.
 
-## 使用（图形界面）
+A desktop app that downloads the files of your FAU StudOn courses into a folder on your own computer
+(which can be a Google Drive / OneDrive / Dropbox folder), keeps StudOn's folder structure, and can update automatically every day.
 
-打开 **StudOn Sync.app**（或 `studon-sync` 命令），左侧有四页：
+- Logs in with your FAU IdM account (FAU SSO + TOTP multi-factor; the 6-digit code is generated for you)
+- Username, password and TOTP secret are stored **only on your computer**, in the system keychain (macOS Keychain / Windows Credential Manager). Nothing is uploaded anywhere.
+- Several courses, each with its own target folder
+- Incremental: only new or changed files are downloaded; **local files are never deleted**
+- **Protects your notes**: when a file changes on StudOn and you have not edited your copy, it is replaced (the old version goes to a hidden `.studon-sync/versions/` folder). If you have edited it (e.g. annotated a PDF), it is never overwritten: the new version is saved next to it as `name (StudOn date).pdf` and you get a notice.
+- Files you delete yourself are not downloaded again; files deleted on StudOn are kept locally and marked
+- A "Files" page lets you pick which files and folders to download, and whether new files download automatically or wait for you
+- Files only (no videos, forums, assignments or links); requests are rate-limited
+- Download engine: [PFERD](https://github.com/Garmelon/PFERD)
 
-1. **账号**：填写 IdM 用户名、密码、TOTP secret，点“保存”。
-   - TOTP secret：在 IdM 门户添加“软件令牌 / Authenticator App”时，二维码旁边显示的 Base32 字符串（或 `otpauth://` 链接）。
-   - IdM 要求添加令牌后输入一次验证码确认：本页下方会实时显示当前 6 位验证码，填回 IdM 即可。
-   - 点“测试登录”确认能登录。
-2. **课程**：粘贴 StudOn 课程链接，点“添加课程”，课程名自动读取。每个课程可“更改文件夹”（比如选 Google Drive 里的文件夹）、暂停或移除。
-3. **文件**：按 StudOn 的文件夹结构列出所有文件，勾选要下载的；状态标签显示已下载 / 你改过 / 有新版·笔记已保留 / 新·待确认 / StudOn 已删除 等。“刷新列表”只读取列表、不下载。
-4. **同步**：点左下角“立即同步”；“自动同步”可选每天某个时间或每隔 N 小时。
-   自动同步由系统在后台执行（macOS LaunchAgent / Windows 任务计划），不需要打开本程序；有新文件或同步失败时弹出通知。
+## Install
 
-## 命令行
+- **macOS**: download `StudOn-Sync-macOS.zip` from [Releases](https://github.com/Whohahaha/studon-sync/releases), unzip it and move `StudOn Sync.app` to Applications.
+  The app is not notarized by Apple, so the first time right-click it → Open (or click "Open Anyway" in System Settings → Privacy & Security).
+- **From source** (macOS / Windows / Linux, Python 3.11+):
+  ```bash
+  git clone https://github.com/Whohahaha/studon-sync.git
+  cd studon-sync
+  python3 -m venv .venv
+  .venv/bin/pip install -e .        # Windows: .venv\Scripts\pip install -e .
+  .venv/bin/studon-sync             # opens the app
+  ```
+  The app is mainly used on macOS; Windows and Linux have only been tried during development.
+
+## Usage
+
+The app has four pages:
+
+1. **Account**: enter your IdM username, password and TOTP secret, then Save.
+   - The TOTP secret is the Base32 string (or `otpauth://` link) shown next to the QR code when you add a "software token / authenticator app" in the IdM portal.
+   - IdM asks for one code to confirm the new token: the Account page shows the current 6-digit code live.
+   - Click "Test login" to check.
+2. **Courses**: paste a StudOn course link and click "Add course"; the name is read automatically. Each course can get its own folder, be paused or removed.
+3. **Files**: all files in StudOn's folder structure, with checkboxes and status labels (downloaded / edited by you / new version, notes kept / new, waiting / deleted on StudOn). "Refresh list" reads the listing without downloading.
+4. **Sync**: "Sync now", or schedule a daily time or every N hours. Scheduled syncs run in the background through the OS (macOS LaunchAgent / Windows Task Scheduler) without the app open, with a notification for new files or failures.
+
+### Command line
 
 ```bash
-studon-sync setup              # 在终端里保存账号/密码/TOTP secret，并显示验证码供 IdM 确认
-studon-sync code               # 显示当前 TOTP 验证码
-studon-sync test-login         # 测试登录
-studon-sync add-course URL [--target 文件夹]
+studon-sync setup              # store username/password/TOTP secret in the terminal
+studon-sync code               # show the current TOTP code
+studon-sync test-login
+studon-sync add-course URL [--target FOLDER]
 studon-sync list
-studon-sync sync               # 同步所有启用的课程
-studon-sync scheduled          # 系统定时任务调用：到了设定时间才同步
+studon-sync sync               # sync all enabled courses
+studon-sync scheduled          # used by the OS scheduler: syncs only when due
 ```
 
-## 数据存放位置
+### Where data is stored
 
-| 内容 | macOS | Windows |
+| What | macOS | Windows |
 |---|---|---|
-| 设置（课程、文件夹、计划） | `~/Library/Application Support/StudOn Sync/settings.json` | `%LOCALAPPDATA%\StudOn Sync\` |
-| 每门课的文件记录、旧版本 | 课程文件夹里隐藏的 `.studon-sync/` | 同左 |
-| 日志（每次同步一个文件） | `~/Library/Logs/StudOn Sync/` | `%LOCALAPPDATA%\StudOn Sync\Logs\` |
-| 账号密码 | 钥匙串里**一个**条目：服务 `studon-sync`、账户 `credentials` | 凭据管理器，`studon-sync` |
+| Settings (courses, folders, schedule) | `~/Library/Application Support/StudOn Sync/settings.json` | `%LOCALAPPDATA%\StudOn Sync\` |
+| Per-course file state, old versions | hidden `.studon-sync/` in each course folder | same |
+| Logs | `~/Library/Logs/StudOn Sync/` | `%LOCALAPPDATA%\StudOn Sync\Logs\` |
+| Credentials | one keychain item: service `studon-sync`, account `credentials` | Credential Manager, `studon-sync` |
 
-## 常见问题
+If the FAU login page changes, a failed login saves the page to the log folder (`login-debug-*.html`). These pages can contain your username, so check them before sharing them in an issue.
 
-- **登录失败 “TOTP 验证码被拒绝”**：令牌还没在 IdM 里确认激活，或 secret 填错了。用“账号”页（或 `studon-sync code`）显示的验证码在 IdM 里确认；若手机 App 也有同一令牌，两边验证码应一致。为防锁号，每次登录只尝试一次验证码、密码错误不重试。
-- **FAU 登录页改版**：登录失败时页面会保存到日志文件夹（`login-debug-*.html`），便于修复。
-- **macOS 询问钥匙串访问**：点“始终允许”，只会问一次。App 有固定的代码签名，以后更新（重新构建）也不会再问。
-- **同步到“文稿/桌面”里的文件夹失败（Operation not permitted）**：系统设置 → 隐私与安全性 → 文件与文件夹（或完全磁盘访问权限），允许 StudOn Sync。
+## Disclaimer and rules of use
 
-## 开发 / 打包
+- This is a personal student project, **not official**, and has nothing to do with FAU / RRZE / StudOn. It is provided "as is" under the MIT license, without any warranty. Use it at your own risk.
+- **Use only your own IdM account, on your own computer.** FAU's [IT usage rules](https://www.idm.fau.de/bedingungen) forbid giving your credentials to others or storing them on devices other people can use, and you are responsible for everything done with your account. Do not store other people's accounts, and do not turn this tool into a web service that logs in on someone's behalf.
+- **Do not redistribute course material.** Course files are copyrighted (§60a UrhG) and meant only for the teachers and students of that course. Do not share your download folder publicly or upload it to GitHub or similar.
+- **Be gentle with the server.** By default files are downloaded one at a time with a 1-second delay between requests. A few syncs per day are plenty; please do not schedule it every few minutes. The IT rules require resources to be used sparingly.
+- Credentials stay in your local keychain. Keeping the password and the TOTP secret on the same computer weakens two-factor protection, so turn on disk encryption (FileVault / BitLocker) and a screen lock.
+- Breaking FAU's rules can get your account suspended. If in doubt, ask RRZE first. StudOn's own terms of use are linked in the StudOn page footer after login.
+
+## Development
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e ".[build]"
-.venv/bin/studon-sync                         # 运行
-.venv/bin/python -m studon_sync.ui.devserver  # 在浏览器里调试界面 (http://127.0.0.1:8765)
-.venv/bin/python -m pytest                    # 测试
-packaging/build_mac.sh                        # 构建并签名 dist/StudOn Sync.app
+.venv/bin/studon-sync                         # run
+.venv/bin/python -m studon_sync.ui.devserver  # UI in a browser (http://127.0.0.1:8765)
+.venv/bin/python -m pytest                    # tests
+packaging/build_mac.sh                        # build and sign dist/StudOn Sync.app
 ```
 
-**代码签名**：macOS 钥匙串的“始终允许”认的是 App 的签名。`build_mac.sh` 默认用一个自签名证书
-“StudOn Sync Local Signing”签名（第一次运行时自动生成，放在
-`~/Library/Application Support/StudOn Sync/signing/` 里单独的钥匙串中，不动登录钥匙串、不需要管理员密码），
-所以重新构建后签名不变、不会重复弹窗。它只在本机有效。
-要发给别人用时，换成 Apple Developer ID（每年 99 美元）：把证书装进登录钥匙串后运行
-`SIGN_IDENTITY="Developer ID Application: 你的名字 (TEAMID)" packaging/build_mac.sh`，
-再用 `xcrun notarytool` 公证，别人打开时就不会有“无法验证开发者”的提示。
+`build_mac.sh` signs with a self-signed "StudOn Sync Local Signing" certificate (created on first run in a separate keychain under `~/Library/Application Support/StudOn Sync/signing/`), so rebuilds keep the same signature and macOS Keychain "Always Allow" keeps working. For a notarized build set `SIGN_IDENTITY="Developer ID Application: …"` and notarize with `xcrun notarytool`.
 
-macOS 生成 `dist/StudOn Sync.app`（约 30 MB，压缩后约 14 MB）。界面用系统自带的 WebView（pywebview），不打包浏览器内核。
-代码结构：`src/studon_sync/core/`（登录、设置、同步、文件保护，不含界面代码）、`ui/`（HTML/CSS/JS 界面 + Python 接口）、`system.py`（系统定时任务、通知）、`__main__.py`（命令行）。界面文字在 `i18n.py`，添加语言只需加一组翻译。
+Code layout: `src/studon_sync/core/` (login, settings, sync, file protection; no UI code), `ui/` (HTML/CSS/JS UI and its Python API), `system.py` (OS scheduler, notifications), `__main__.py` (CLI). UI strings live in `i18n.py`.
+
+## License
+
+[MIT](LICENSE). PFERD is also MIT-licensed.
